@@ -23,6 +23,11 @@ output "key_vault_uri" {
   value       = azurerm_key_vault.this.vault_uri
 }
 
+output "key_vault_name" {
+  description = "Key Vault name used by deployment workflows."
+  value       = azurerm_key_vault.this.name
+}
+
 output "postgres_connection_secret_name" {
   description = "Key Vault secret name containing the PostgreSQL connection string."
   value       = azurerm_key_vault_secret.postgres_connection_string.name
