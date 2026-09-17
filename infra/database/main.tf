@@ -1,6 +1,8 @@
 terraform {
   required_version = ">= 1.5.0"
 
+  backend "azurerm" {}
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -99,7 +101,12 @@ resource "azurerm_key_vault" "this" {
   rbac_authorization_enabled    = true
   purge_protection_enabled      = true
   soft_delete_retention_days    = 90
-  public_network_access_enabled = false
+  public_network_access_enabled = true
+
+  network_acls {
+    default_action = "Allow"
+    bypass         = "AzureServices"
+  }
   tags                          = local.tags
 }
 
