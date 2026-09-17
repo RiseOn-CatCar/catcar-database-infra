@@ -101,13 +101,33 @@ resource "azurerm_key_vault" "this" {
   rbac_authorization_enabled    = true
   purge_protection_enabled      = true
   soft_delete_retention_days    = 90
-  public_network_access_enabled = true
+  public_network_access_enabled = false
 
   network_acls {
-    default_action = "Allow"
+    default_action = "Deny"
     bypass         = "AzureServices"
   }
   tags                          = local.tags
+}
+resource "azurerm_private_endpoint" "key_vault" {
+  count               = var.private_endpoint_subnet_id == null ? 0 : 1
+  name                = "pe-kv-${local.name_prefix}"
+  location            = data.azurerm_resource_group.shared.location
+  resource_group_name = data.azurerm_resource_group.shared.name
+  subnet_id           = var.private_endpoint_subnet_id
+  private_service_connection {
+    name                           = "psc-kv-${local.name_prefix}"
+    private_connection_resource_id = azurerm_key_vault.this.id
+    subresource_names              = ["vault"]
+    is_manual_connection           = false
+  }
+}
+
+resource "azurerm_key_vault_secret" "postgres_auth_readonly_connection_string" {
+  name         = "postgres-auth-readonly-connection-string"
+  value        = "Host=${azurerm_postgresql_flexible_server.this.fqdn};Port=5432;Database=${azurerm_postgresql_flexible_server_database.this.name};Username=${var.auth_readonly_login};Password=${var.auth_readonly_password};Ssl Mode=Require;Trust Server Certificate=false"
+  key_vault_id = azurerm_key_vault.this.id
+  depends_on   = [azurerm_role_assignment.terraform_secrets_officer]
 }
 
 resource "azurerm_role_assignment" "terraform_secrets_officer" {

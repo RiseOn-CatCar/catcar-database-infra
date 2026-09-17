@@ -44,6 +44,30 @@ variable "administrator_password" {
     error_message = "administrator_password must contain at least 12 characters."
   }
 }
+variable "auth_readonly_login" {
+  description = "PostgreSQL login used by auth service for read-only access; this role must exist in the database."
+  type        = string
+  default     = "auth_readonly"
+}
+
+variable "auth_readonly_password" {
+  description = "Password for the auth service read-only PostgreSQL role; the role must exist."
+  type        = string
+  sensitive   = true
+  default     = "CiReadonlyPassword1!"
+
+  validation {
+    condition     = length(var.auth_readonly_password) >= 12
+    error_message = "auth_readonly_password must contain at least 12 characters."
+  }
+}
+
+variable "private_endpoint_subnet_id" {
+  description = "Optional subnet ID for a private Key Vault endpoint."
+  type        = string
+  default     = null
+  nullable    = true
+}
 
 variable "database_name" {
   description = "Logical CatCar database name."
