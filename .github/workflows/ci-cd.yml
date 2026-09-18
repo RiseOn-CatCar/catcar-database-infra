@@ -59,7 +59,8 @@ jobs:
             -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'rg-catcar-tfstate' }}" \
             -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || vars.TF_BACKEND_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
             -backend-config="container_name=${{ vars.TF_BACKEND_CONTAINER || 'tfstate' }}" \
-            -backend-config="key=homolog-catcar-database.tfstate"
+            -backend-config="key=homolog-catcar-database.tfstate" \
+            -backend-config="use_azuread_auth=true"
       - name: Terraform Plan & Apply (Database Homologation)
         run: |
           terraform plan -input=false -out=db.tfplan
@@ -90,7 +91,8 @@ jobs:
             -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'rg-catcar-tfstate' }}" \
             -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || vars.TF_BACKEND_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
             -backend-config="container_name=${{ vars.TF_BACKEND_CONTAINER || 'tfstate' }}" \
-            -backend-config="key=catcar-database.tfstate"
+            -backend-config="key=catcar-database.tfstate" \
+            -backend-config="use_azuread_auth=true"
       - name: Terraform Plan & Apply (Database Production)
         run: |
           terraform plan -input=false -out=db.tfplan
