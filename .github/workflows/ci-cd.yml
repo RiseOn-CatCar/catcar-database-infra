@@ -56,7 +56,7 @@ jobs:
       - name: Terraform Init (Database Homologation)
         run: |
           terraform init -input=false \
-            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'catcar-homolog' }}" \
+            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'rg-catcar-tfstate' }}" \
             -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || vars.TF_BACKEND_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
             -backend-config="container_name=${{ vars.TF_BACKEND_CONTAINER || 'tfstate' }}" \
             -backend-config="key=homolog-catcar-database.tfstate"
@@ -88,7 +88,7 @@ jobs:
       - name: Terraform Init (Database Production)
         run: |
           terraform init -input=false \
-            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'catcar-prod' }}" \
+            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'rg-catcar-tfstate' }}" \
             -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || vars.TF_BACKEND_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
             -backend-config="container_name=${{ vars.TF_BACKEND_CONTAINER || 'tfstate' }}" \
             -backend-config="key=catcar-database.tfstate"
