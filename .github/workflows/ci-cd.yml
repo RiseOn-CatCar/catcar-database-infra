@@ -1,0 +1,88 @@
+name: Database Infra CI/CD
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  ARM_USE_OIDC: true
+  TF_VAR_resource_group_name: ${{ vars.CATCAR_FOUNDATION_RESOURCE_GROUP || 'CatCar' }}
+  TF_VAR_administrator_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD || format('CiValidation-{0}-Admin!', github.run_id) }}
+  TF_VAR_auth_readonly_password: ${{ secrets.POSTGRES_AUTH_READONLY_PASSWORD || format('CiValidation-{0}-Readonly!', github.run_id) }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      - name: Terraform Init
+        run: terraform init -backend=false
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+      - name: Terraform Validate
+        run: terraform validate
+
+  plan-and-apply-homologation:
+    needs: validate
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push' && vars.AZURE_CLIENT_ID != ''
+    runs-on: ubuntu-latest
+    environment: homologation
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Terraform Init (Database Homologation)
+        run: |
+          terraform init -input=false \
+            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || 'rg-catcar-tfstate' }}" \
+            -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=homolog-catcar-database.tfstate"
+      - name: Terraform Plan & Apply (Database Homologation)
+        run: |
+          terraform plan -input=false -out=db.tfplan
+          terraform apply -input=false -auto-approve db.tfplan
+
+  plan-and-apply-production:
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.AZURE_CLIENT_ID != ''
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Terraform Init (Database Production)
+        run: |
+          terraform init -input=false \
+            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || 'rg-catcar-tfstate' }}" \
+            -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=catcar-database.tfstate"
+      - name: Terraform Plan & Apply (Database Production)
+        run: |
+          terraform plan -input=false -out=db.tfplan
+          terraform apply -input=false -auto-approve db.tfplan

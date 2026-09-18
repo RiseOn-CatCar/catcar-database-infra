@@ -61,12 +61,6 @@ variable "auth_readonly_password" {
   }
 }
 
-variable "private_endpoint_subnet_id" {
-  description = "Optional subnet ID for a private Key Vault endpoint."
-  type        = string
-  default     = null
-  nullable    = true
-}
 
 variable "database_name" {
   description = "Logical CatCar database name."

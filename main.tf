@@ -25,6 +25,12 @@ data "azurerm_virtual_network" "shared" {
   name                = var.vnet_name
   resource_group_name = data.azurerm_resource_group.shared.name
 }
+data "azurerm_subnet" "private_endpoints" {
+  name                 = "snet-private-endpoints"
+  virtual_network_name = data.azurerm_virtual_network.shared.name
+  resource_group_name  = data.azurerm_resource_group.shared.name
+}
+
 
 locals {
   name_prefix = "${var.application_name}-${var.environment}"
@@ -45,7 +51,7 @@ resource "azurerm_subnet" "postgresql" {
     name = "postgresql-flexible-server"
 
     service_delegation {
-      name = "Microsoft.DBforPostgreSQL/flexibleServers"
+      name    = "Microsoft.DBforPostgreSQL/flexibleServers"
       actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
     }
   }
@@ -107,30 +113,29 @@ resource "azurerm_key_vault" "this" {
     default_action = "Deny"
     bypass         = "AzureServices"
   }
-  tags                          = local.tags
+  tags = local.tags
 }
 
 resource "azurerm_private_dns_zone" "key_vault" {
-  count               = var.private_endpoint_subnet_id == null ? 0 : 1
   name                = "privatelink.vaultcore.azure.net"
   resource_group_name = data.azurerm_resource_group.shared.name
   tags                = local.tags
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "key_vault" {
-  count                 = var.private_endpoint_subnet_id == null ? 0 : 1
   name                  = "pdnslink-key-vault-${local.name_prefix}"
-  private_dns_zone_name = azurerm_private_dns_zone.key_vault[0].name
+  private_dns_zone_name = azurerm_private_dns_zone.key_vault.name
   virtual_network_id    = data.azurerm_virtual_network.shared.id
   resource_group_name   = data.azurerm_resource_group.shared.name
 }
 
 resource "azurerm_private_endpoint" "key_vault" {
-  count               = var.private_endpoint_subnet_id == null ? 0 : 1
   name                = "pe-kv-${local.name_prefix}"
   location            = data.azurerm_resource_group.shared.location
   resource_group_name = data.azurerm_resource_group.shared.name
-  subnet_id           = var.private_endpoint_subnet_id
+  subnet_id           = data.azurerm_subnet.private_endpoints.id
+  tags                = local.tags
+
   private_service_connection {
     name                           = "psc-kv-${local.name_prefix}"
     private_connection_resource_id = azurerm_key_vault.this.id
@@ -140,7 +145,7 @@ resource "azurerm_private_endpoint" "key_vault" {
 
   private_dns_zone_group {
     name                 = "key-vault-private-dns"
-    private_dns_zone_ids = [azurerm_private_dns_zone.key_vault[0].id]
+    private_dns_zone_ids = [azurerm_private_dns_zone.key_vault.id]
   }
 }
 
