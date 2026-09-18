@@ -11,9 +11,9 @@ variable "environment" {
 }
 
 variable "resource_group_name" {
-  description = "Resource group provisioned by catcar-kubernetes-infra."
+  description = "Foundation resource group prepared by the Azure bootstrap."
   type        = string
-  default     = "rg-catcar-prod"
+  default     = "CatCar"
 }
 
 variable "vnet_name" {
@@ -54,7 +54,6 @@ variable "auth_readonly_password" {
   description = "Password for the auth service read-only PostgreSQL role; the role must exist."
   type        = string
   sensitive   = true
-  default     = "CiReadonlyPassword1!"
 
   validation {
     condition     = length(var.auth_readonly_password) >= 12

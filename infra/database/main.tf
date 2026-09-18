@@ -109,6 +109,22 @@ resource "azurerm_key_vault" "this" {
   }
   tags                          = local.tags
 }
+
+resource "azurerm_private_dns_zone" "key_vault" {
+  count               = var.private_endpoint_subnet_id == null ? 0 : 1
+  name                = "privatelink.vaultcore.azure.net"
+  resource_group_name = data.azurerm_resource_group.shared.name
+  tags                = local.tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "key_vault" {
+  count                 = var.private_endpoint_subnet_id == null ? 0 : 1
+  name                  = "pdnslink-key-vault-${local.name_prefix}"
+  private_dns_zone_name = azurerm_private_dns_zone.key_vault[0].name
+  virtual_network_id    = data.azurerm_virtual_network.shared.id
+  resource_group_name   = data.azurerm_resource_group.shared.name
+}
+
 resource "azurerm_private_endpoint" "key_vault" {
   count               = var.private_endpoint_subnet_id == null ? 0 : 1
   name                = "pe-kv-${local.name_prefix}"
@@ -120,6 +136,11 @@ resource "azurerm_private_endpoint" "key_vault" {
     private_connection_resource_id = azurerm_key_vault.this.id
     subresource_names              = ["vault"]
     is_manual_connection           = false
+  }
+
+  private_dns_zone_group {
+    name                 = "key-vault-private-dns"
+    private_dns_zone_ids = [azurerm_private_dns_zone.key_vault[0].id]
   }
 }
 
