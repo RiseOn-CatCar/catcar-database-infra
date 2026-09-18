@@ -15,7 +15,7 @@ env:
   ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
   ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
   ARM_USE_OIDC: true
-  TF_VAR_resource_group_name: ${{ vars.CATCAR_FOUNDATION_RESOURCE_GROUP || 'CatCar' }}
+  TF_VAR_resource_group_name: ${{ vars.CATCAR_FOUNDATION_RESOURCE_GROUP || 'catcar-prod' }}
   TF_VAR_administrator_password: ${{ secrets.POSTGRES_ADMIN_PASSWORD || format('CiValidation-{0}-Admin!', github.run_id) }}
   TF_VAR_auth_readonly_password: ${{ secrets.POSTGRES_AUTH_READONLY_PASSWORD || format('CiValidation-{0}-Readonly!', github.run_id) }}
 
@@ -41,7 +41,7 @@ jobs:
     env:
       ARM_CLIENT_ID: ${{ vars.AZURE_DEPLOY_CLIENT_ID || vars.AZURE_CLIENT_ID }}
       TF_VAR_environment: homolog
-      TF_VAR_resource_group_name: ${{ vars.CATCAR_FOUNDATION_RESOURCE_GROUP || 'rg-catcar-homolog' }}
+      TF_VAR_resource_group_name: ${{ vars.CATCAR_FOUNDATION_RESOURCE_GROUP || 'catcar-homolog' }}
       TF_VAR_vnet_name: vnet-catcar-homolog
     steps:
       - uses: actions/checkout@v4
@@ -73,7 +73,7 @@ jobs:
     env:
       ARM_CLIENT_ID: ${{ vars.AZURE_DEPLOY_CLIENT_ID || vars.AZURE_CLIENT_ID }}
       TF_VAR_environment: prod
-      TF_VAR_resource_group_name: ${{ vars.CATCAR_FOUNDATION_RESOURCE_GROUP || 'CatCar' }}
+      TF_VAR_resource_group_name: ${{ vars.CATCAR_FOUNDATION_RESOURCE_GROUP || 'catcar-prod' }}
       TF_VAR_vnet_name: ${{ vars.CATCAR_VNET_NAME || 'vnet-catcar-prod' }}
     steps:
       - uses: actions/checkout@v4
