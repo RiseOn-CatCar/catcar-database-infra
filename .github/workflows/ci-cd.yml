@@ -64,7 +64,6 @@ jobs:
         run: |
           terraform plan -input=false -out=db.tfplan
           terraform apply -input=false -auto-approve db.tfplan
-
   plan-and-apply-production:
     needs: validate
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && (vars.AZURE_DEPLOY_CLIENT_ID != '' || vars.AZURE_CLIENT_ID != '')
