@@ -11,9 +11,9 @@ variable "environment" {
 }
 
 variable "resource_group_name" {
-  description = "Foundation resource group prepared by the Azure bootstrap."
+  description = "Resource group for CatCar database and secrets infrastructure."
   type        = string
-  default     = "CatCar"
+  default     = "catcar-prod"
 }
 
 variable "vnet_name" {
@@ -71,7 +71,7 @@ variable "database_name" {
 variable "sku_name" {
   description = "PostgreSQL Flexible Server SKU."
   type        = string
-  default     = "GP_Standard_D2s_v3"
+  default     = "B_Standard_B1ms"
 }
 
 variable "storage_mb" {
