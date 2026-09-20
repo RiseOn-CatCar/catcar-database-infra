@@ -25,15 +25,10 @@ data "azurerm_virtual_network" "shared" {
   name                = var.vnet_name
   resource_group_name = data.azurerm_resource_group.shared.name
 }
-data "azurerm_subnet" "private_endpoints" {
-  name                 = "snet-private-endpoints"
-  virtual_network_name = data.azurerm_virtual_network.shared.name
-  resource_group_name  = data.azurerm_resource_group.shared.name
-}
-
 
 locals {
   name_prefix = "${var.application_name}-${var.environment}"
+  sub_suffix  = substr(data.azurerm_client_config.current.subscription_id, 0, 8)
   tags = merge(var.tags, {
     application = var.application_name
     environment = var.environment
@@ -99,7 +94,7 @@ resource "azurerm_postgresql_flexible_server_database" "this" {
 }
 
 resource "azurerm_key_vault" "this" {
-  name                          = substr("kv-${local.name_prefix}", 0, 24)
+  name                          = "kv-catcar-prod-${local.sub_suffix}"
   location                      = data.azurerm_resource_group.shared.location
   resource_group_name           = data.azurerm_resource_group.shared.name
   tenant_id                     = data.azurerm_client_config.current.tenant_id
@@ -107,53 +102,13 @@ resource "azurerm_key_vault" "this" {
   rbac_authorization_enabled    = true
   purge_protection_enabled      = true
   soft_delete_retention_days    = 90
-  public_network_access_enabled = false
+  public_network_access_enabled = true
 
   network_acls {
-    default_action = "Deny"
+    default_action = "Allow"
     bypass         = "AzureServices"
   }
   tags = local.tags
-}
-
-resource "azurerm_private_dns_zone" "key_vault" {
-  name                = "privatelink.vaultcore.azure.net"
-  resource_group_name = data.azurerm_resource_group.shared.name
-  tags                = local.tags
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "key_vault" {
-  name                  = "pdnslink-key-vault-${local.name_prefix}"
-  private_dns_zone_name = azurerm_private_dns_zone.key_vault.name
-  virtual_network_id    = data.azurerm_virtual_network.shared.id
-  resource_group_name   = data.azurerm_resource_group.shared.name
-}
-
-resource "azurerm_private_endpoint" "key_vault" {
-  name                = "pe-kv-${local.name_prefix}"
-  location            = data.azurerm_resource_group.shared.location
-  resource_group_name = data.azurerm_resource_group.shared.name
-  subnet_id           = data.azurerm_subnet.private_endpoints.id
-  tags                = local.tags
-
-  private_service_connection {
-    name                           = "psc-kv-${local.name_prefix}"
-    private_connection_resource_id = azurerm_key_vault.this.id
-    subresource_names              = ["vault"]
-    is_manual_connection           = false
-  }
-
-  private_dns_zone_group {
-    name                 = "key-vault-private-dns"
-    private_dns_zone_ids = [azurerm_private_dns_zone.key_vault.id]
-  }
-}
-
-resource "azurerm_key_vault_secret" "postgres_auth_readonly_connection_string" {
-  name         = "postgres-auth-readonly-connection-string"
-  value        = "Host=${azurerm_postgresql_flexible_server.this.fqdn};Port=5432;Database=${azurerm_postgresql_flexible_server_database.this.name};Username=${var.auth_readonly_login};Password=${var.auth_readonly_password};Ssl Mode=Require;Trust Server Certificate=false"
-  key_vault_id = azurerm_key_vault.this.id
-  depends_on   = [azurerm_role_assignment.terraform_secrets_officer]
 }
 
 resource "azurerm_role_assignment" "terraform_secrets_officer" {
@@ -170,11 +125,34 @@ resource "azurerm_key_vault_secret" "postgres_connection_string" {
   depends_on = [azurerm_role_assignment.terraform_secrets_officer]
 }
 
-resource "azurerm_postgresql_flexible_server_firewall_rule" "allowed" {
-  for_each = var.firewall_rules
+resource "azurerm_key_vault_secret" "postgres_auth_readonly_connection_string" {
+  name         = "postgres-auth-readonly-connection-string"
+  value        = "Host=${azurerm_postgresql_flexible_server.this.fqdn};Port=5432;Database=${azurerm_postgresql_flexible_server_database.this.name};Username=${var.auth_readonly_login};Password=${var.auth_readonly_password};Ssl Mode=Require;Trust Server Certificate=false"
+  key_vault_id = azurerm_key_vault.this.id
 
-  name             = each.key
-  server_id        = azurerm_postgresql_flexible_server.this.id
-  start_ip_address = each.value.start_ip_address
-  end_ip_address   = each.value.end_ip_address
+  depends_on = [azurerm_role_assignment.terraform_secrets_officer]
+}
+
+resource "azurerm_key_vault_secret" "jwt_secret" {
+  name         = "jwt-secret"
+  value        = var.jwt_secret
+  key_vault_id = azurerm_key_vault.this.id
+
+  depends_on = [azurerm_role_assignment.terraform_secrets_officer]
+}
+
+resource "azurerm_key_vault_secret" "customer_jwt_signing_key" {
+  name         = "customer-jwt-signing-key"
+  value        = var.customer_jwt_signing_key
+  key_vault_id = azurerm_key_vault.this.id
+
+  depends_on = [azurerm_role_assignment.terraform_secrets_officer]
+}
+
+resource "azurerm_key_vault_secret" "gateway_backend_key" {
+  name         = "gateway-backend-key"
+  value        = var.gateway_backend_key
+  key_vault_id = azurerm_key_vault.this.id
+
+  depends_on = [azurerm_role_assignment.terraform_secrets_officer]
 }
