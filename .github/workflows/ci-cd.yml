@@ -2,13 +2,18 @@ name: Database Infra CI/CD
 
 on:
   push:
-    branches: [develop, main]
+    branches: [main]
+    tags: ['v*.*.*']
   pull_request:
-    branches: [develop, main]
+    branches: [main]
 
 permissions:
   contents: read
   id-token: write
+
+concurrency:
+  group: catcar-database-infra-prod
+  cancel-in-progress: false
 
 env:
   ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
@@ -21,6 +26,7 @@ env:
 
 jobs:
   validate:
+    name: Validate Database Terraform
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,41 +39,10 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
-  plan-and-apply-homologation:
-    needs: validate
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push' && (vars.AZURE_DEPLOY_CLIENT_ID != '' || vars.AZURE_CLIENT_ID != '')
-    runs-on: ubuntu-latest
-    environment: homologation
-    env:
-      ARM_CLIENT_ID: ${{ vars.AZURE_DEPLOY_CLIENT_ID || vars.AZURE_CLIENT_ID }}
-      TF_VAR_environment: homolog
-      TF_VAR_resource_group_name: ${{ vars.CATCAR_FOUNDATION_RESOURCE_GROUP || 'catcar-homolog' }}
-      TF_VAR_vnet_name: vnet-catcar-homolog
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_DEPLOY_CLIENT_ID || vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      - name: Terraform Init (Database Homologation)
-        run: |
-          terraform init -input=false \
-            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'rg-catcar-tfstate' }}" \
-            -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || vars.TF_BACKEND_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
-            -backend-config="container_name=${{ vars.TF_BACKEND_CONTAINER || 'tfstate' }}" \
-            -backend-config="key=homolog-catcar-database.tfstate" \
-            -backend-config="use_azuread_auth=true"
-      - name: Terraform Plan & Apply (Database Homologation)
-        run: |
-          terraform plan -input=false -out=db.tfplan
-          terraform apply -input=false -auto-approve db.tfplan
   plan-and-apply-production:
+    name: Apply Production Database
     needs: validate
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && (vars.AZURE_DEPLOY_CLIENT_ID != '' || vars.AZURE_CLIENT_ID != '')
+    if: startsWith(github.ref, 'refs/tags/v') && (vars.AZURE_DEPLOY_CLIENT_ID != '' || vars.AZURE_CLIENT_ID != '')
     runs-on: ubuntu-latest
     environment: production
     env:
@@ -75,24 +50,48 @@ jobs:
       TF_VAR_environment: prod
       TF_VAR_resource_group_name: ${{ vars.CATCAR_FOUNDATION_RESOURCE_GROUP || 'catcar-prod' }}
       TF_VAR_vnet_name: ${{ vars.CATCAR_VNET_NAME || 'vnet-catcar-prod' }}
+      TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+      TF_VAR_customer_jwt_signing_key: ${{ secrets.CUSTOMER_JWT_SIGNING_KEY }}
+      TF_VAR_gateway_backend_key: ${{ secrets.GATEWAY_BACKEND_KEY }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate Release Tag Contract
+        run: |
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          echo "Validating tag $TAG_NAME..."
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag $TAG_NAME does not follow strict SemVer syntax (vX.Y.Z)"
+            exit 1
+          fi
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag commit $GITHUB_SHA is not reachable from origin/main"
+            exit 1
+          fi
+          echo "Tag $TAG_NAME contract validated successfully."
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+
       - name: Azure Login
         uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_DEPLOY_CLIENT_ID || vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
       - name: Terraform Init (Database Production)
         run: |
           terraform init -input=false \
-            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || vars.TF_BACKEND_RESOURCE_GROUP || 'rg-catcar-tfstate' }}" \
-            -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || vars.TF_BACKEND_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
+            -backend-config="resource_group_name=${{ vars.AZURE_TF_STATE_RG || 'catcar-tfstate' }}" \
+            -backend-config="storage_account_name=${{ vars.AZURE_TF_STATE_STORAGE_ACCOUNT || 'stcatcartfstate' }}" \
             -backend-config="container_name=${{ vars.TF_BACKEND_CONTAINER || 'tfstate' }}" \
             -backend-config="key=catcar-database.tfstate" \
             -backend-config="use_azuread_auth=true"
+
       - name: Terraform Plan & Apply (Database Production)
         run: |
           terraform plan -input=false -out=db.tfplan
