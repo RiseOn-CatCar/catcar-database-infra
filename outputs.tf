@@ -32,3 +32,19 @@ output "postgres_connection_secret_name" {
   description = "Key Vault secret name containing the PostgreSQL connection string."
   value       = azurerm_key_vault_secret.postgres_connection_string.name
 }
+
+output "postgres_auth_readonly_secret_id" {
+  value = azurerm_key_vault_secret.postgres_auth_readonly_connection_string.versionless_id
+}
+
+output "postgres_auth_readonly_secret_name" {
+  value = azurerm_key_vault_secret.postgres_auth_readonly_connection_string.name
+}
+
+output "customer_jwt_secret_id" {
+  value = azurerm_key_vault_secret.customer_jwt_signing_key.versionless_id
+}
+
+output "auth_readonly_login" {
+  value = var.auth_readonly_login
+}
