@@ -17,26 +17,39 @@ provider "azurerm" {
 
 data "azurerm_client_config" "current" {}
 
+data "terraform_remote_state" "foundation" {
+  backend = "azurerm"
+  config = {
+    resource_group_name  = var.foundation_state_resource_group_name
+    storage_account_name = var.foundation_state_storage_account_name
+    container_name       = var.foundation_state_container_name
+    key                  = var.foundation_state_key
+    use_azuread_auth     = true
+    use_oidc             = true
+  }
+}
+
 data "azurerm_resource_group" "shared" {
-  name = var.resource_group_name
+  name = data.terraform_remote_state.foundation.outputs.resource_group_name
 }
 
 data "azurerm_virtual_network" "shared" {
-  name                = var.vnet_name
+  name                = data.terraform_remote_state.foundation.outputs.vnet_name
   resource_group_name = data.azurerm_resource_group.shared.name
 }
 data "azurerm_subnet" "private_endpoints" {
-  name                 = "snet-private-endpoints"
+  name                 = reverse(split("/", data.terraform_remote_state.foundation.outputs.private_endpoints_subnet_id))[0]
   virtual_network_name = data.azurerm_virtual_network.shared.name
   resource_group_name  = data.azurerm_resource_group.shared.name
 }
 
 
 locals {
-  name_prefix = "${var.application_name}-${var.environment}"
+  name_prefix = var.application_name
+  suffix      = substr(sha256("${data.azurerm_client_config.current.subscription_id}:${var.application_name}"), 0, 8)
   tags = merge(var.tags, {
     application = var.application_name
-    environment = var.environment
+    environment = "azure"
     managed_by  = "terraform"
   })
 }
@@ -71,7 +84,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "postgresql" {
 }
 
 resource "azurerm_postgresql_flexible_server" "this" {
-  name                   = "psql-${local.name_prefix}"
+  name                   = coalesce(var.postgresql_server_name, "psql-${local.name_prefix}-${local.suffix}")
   resource_group_name    = data.azurerm_resource_group.shared.name
   location               = data.azurerm_resource_group.shared.location
   version                = "17"
@@ -99,7 +112,7 @@ resource "azurerm_postgresql_flexible_server_database" "this" {
 }
 
 resource "azurerm_key_vault" "this" {
-  name                          = substr("kv-${local.name_prefix}", 0, 24)
+  name                          = coalesce(var.key_vault_name, "kv-${substr(local.name_prefix, 0, 12)}-${local.suffix}")
   location                      = data.azurerm_resource_group.shared.location
   resource_group_name           = data.azurerm_resource_group.shared.name
   tenant_id                     = data.azurerm_client_config.current.tenant_id
@@ -107,10 +120,10 @@ resource "azurerm_key_vault" "this" {
   rbac_authorization_enabled    = true
   purge_protection_enabled      = true
   soft_delete_retention_days    = 90
-  public_network_access_enabled = false
+  public_network_access_enabled = true
 
   network_acls {
-    default_action = "Deny"
+    default_action = "Allow"
     bypass         = "AzureServices"
   }
   tags = local.tags
@@ -152,6 +165,13 @@ resource "azurerm_private_endpoint" "key_vault" {
 resource "azurerm_key_vault_secret" "postgres_auth_readonly_connection_string" {
   name         = "postgres-auth-readonly-connection-string"
   value        = "Host=${azurerm_postgresql_flexible_server.this.fqdn};Port=5432;Database=${azurerm_postgresql_flexible_server_database.this.name};Username=${var.auth_readonly_login};Password=${var.auth_readonly_password};Ssl Mode=Require;Trust Server Certificate=false"
+  key_vault_id = azurerm_key_vault.this.id
+  depends_on   = [azurerm_role_assignment.terraform_secrets_officer]
+}
+
+resource "azurerm_key_vault_secret" "customer_jwt_signing_key" {
+  name         = "customer-jwt-signing-key"
+  value        = var.customer_jwt_signing_key
   key_vault_id = azurerm_key_vault.this.id
   depends_on   = [azurerm_role_assignment.terraform_secrets_officer]
 }

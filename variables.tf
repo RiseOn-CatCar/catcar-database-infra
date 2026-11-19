@@ -4,22 +4,41 @@ variable "application_name" {
   default     = "catcar"
 }
 
-variable "environment" {
-  description = "Deployment environment."
+variable "postgresql_server_name" {
+  description = "Existing PostgreSQL server name to adopt; null uses the deterministic default."
   type        = string
-  default     = "prod"
+  default     = null
 }
 
-variable "resource_group_name" {
-  description = "Resource group for CatCar database and secrets infrastructure."
+variable "key_vault_name" {
+  description = "Existing Key Vault name to adopt; null uses the deterministic default."
   type        = string
-  default     = "catcar-prod"
+  default     = null
 }
 
-variable "vnet_name" {
-  description = "VNet provisioned by catcar-kubernetes-infra."
-  type        = string
-  default     = "vnet-catcar-prod"
+variable "foundation_state_resource_group_name" {
+  type = string
+}
+
+variable "foundation_state_storage_account_name" {
+  type = string
+}
+
+variable "foundation_state_container_name" {
+  type = string
+}
+
+variable "foundation_state_key" {
+  type = string
+}
+
+variable "customer_jwt_signing_key" {
+  type      = string
+  sensitive = true
+  validation {
+    condition     = length(var.customer_jwt_signing_key) >= 32
+    error_message = "The customer JWT signing key must contain at least 32 characters."
+  }
 }
 
 variable "postgresql_subnet_prefix" {

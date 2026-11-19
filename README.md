@@ -11,7 +11,8 @@ Terraform Infrastructure as Code (IaC) repository provisioning managed PostgreSQ
 - **Key Vault & Secrets**: Azure Key Vault with Azure RBAC authorization, Private Endpoint (`pe-kv-*`), Private DNS Zone (`privatelink.vaultcore.azure.net`), and automated secret storage for:
   - `postgres-connection-string`: Primary connection string for CatCar API.
   - `postgres-auth-readonly-connection-string`: Read-only connection string for CatCar Auth Function.
-- **Cross-Stack Decoupling**: Dynamically discovers the private endpoint subnet (`snet-private-endpoints`) provisioned by `catcar-kubernetes-infra` via Terraform data sources without output dependencies.
+  - `customer-jwt-signing-key`: Customer JWT signing key shared with APIM.
+- **Foundation dependency**: Resource group, VNet and private endpoint subnet are read from the foundation Terraform state.
 
 
 ## Dedicated Database Infrastructure Architecture
@@ -35,7 +36,7 @@ flowchart LR
     App[AKS API / Auth Function identities] -.RBAC secret access.-> KV
 ```
 
-PostgreSQL traffic remains private through its delegated subnet and private DNS. Each bounded context uses an isolated schema, while Key Vault is reached through a private endpoint and authorizes managed identities with Azure RBAC rather than application-held credentials.
+PostgreSQL traffic remains private through its delegated subnet and private DNS. Key Vault authorizes access with Azure RBAC and supports its private endpoint as well as authenticated access through its public endpoint.
 
 ## API Health Checks & Postman
 
@@ -58,7 +59,7 @@ Import the environment, set `baseUrl` to the deployed API endpoint, and run **He
 ├── main.tf                    # PostgreSQL Flexible Server, Key Vault, and DNS resources
 ├── variables.tf               # Input parameters and defaults
 ├── outputs.tf                 # Server FQDN, database ID, and Key Vault URI
-└── .github/workflows/ci-cd.yml # Automated lint, validation, and multi-environment apply
+└── .github/workflows/ci-cd.yml # Automated lint, validation, and Azure release
 ```
 
 ---
@@ -72,9 +73,11 @@ terraform validate
 ```
 
 ---
+For the single Azure release, provide `foundation_state_resource_group_name`, `foundation_state_storage_account_name`, `foundation_state_container_name` and `foundation_state_key`, plus the administrator, read-only and customer JWT secrets. The foundation state must already exist. Follow the [central Azure bootstrap runbook](https://github.com/RiseOn-CatCar/catcar-platform/blob/main/docs/azure-bootstrap.md); never publish Terraform state or saved plans.
+
+The default PostgreSQL server and Key Vault names are `psql-catcar-<suffix>` and `kv-catcar-<suffix>`, where the suffix is the first eight hex characters of SHA-256 over `<subscription-id>:catcar` (for example, `3c4128ef`). Set `postgresql_server_name` and `key_vault_name` to retain existing names when adopting resources; import them into their existing Terraform resource addresses and review the plan before applying. Naming changes for other existing resources can also cause replacements, so reconcile state and resource names before migration.
 
 ## CI/CD Pipeline
 
-- **Pull Requests**: Runs `terraform fmt` and `terraform validate`.
-- **Push to `develop`**: Applies changes to **Homologation** environment with state key `homolog-catcar-database.tfstate`.
-- **Push to `main`**: Applies changes to **Production** environment with state key `catcar-database.tfstate`.
+- **Pull requests** validate the Terraform configuration.
+- The single Azure release uses the shared foundation state and one database state; coordinate deployment through the platform release workflow.
