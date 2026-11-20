@@ -8,11 +8,11 @@ Terraform Infrastructure as Code (IaC) repository provisioning managed PostgreSQ
 
 - **Relational Database**: Azure Database for PostgreSQL Flexible Server with automated backups, custom storage configuration, and strict SSL enforcement.
 - **Database Networking**: Delegated Subnet (`snet-postgresql`), Private DNS Zone (`private.postgres.database.azure.com`), and VNet Link to ensure isolated private communication.
-- **Key Vault & Secrets**: Azure Key Vault with Azure RBAC authorization, Private Endpoint (`pe-kv-*`), Private DNS Zone (`privatelink.vaultcore.azure.net`), and automated secret storage for:
+- **Key Vault & Secrets**: Azure Key Vault with Azure RBAC authorization and a public endpoint for authenticated access, with automated secret storage for:
   - `postgres-connection-string`: Primary connection string for CatCar API.
   - `postgres-auth-readonly-connection-string`: Read-only connection string for CatCar Auth Function.
   - `customer-jwt-signing-key`: Customer JWT signing key shared with APIM.
-- **Foundation dependency**: Resource group, VNet and private endpoint subnet are read from the foundation Terraform state.
+- **Foundation dependency**: Resource group and VNet are read from the foundation Terraform state.
 
 
 ## Dedicated Database Infrastructure Architecture
@@ -30,13 +30,12 @@ flowchart LR
     PG --> IA[(identity_access)]
 
     TF --> KV[Azure Key Vault<br/>RBAC authorization]
-    PE[Private Endpoint] --> KV
     KV --> Secret1[postgres-connection-string]
     KV --> Secret2[postgres-auth-readonly-connection-string]
     App[AKS API / Auth Function identities] -.RBAC secret access.-> KV
 ```
 
-PostgreSQL traffic remains private through its delegated subnet and private DNS. Key Vault authorizes access with Azure RBAC and supports its private endpoint as well as authenticated access through its public endpoint.
+PostgreSQL permanece privado, com SKU B1ms, 32 GiB, backup local por sete dias e sem alta disponibilidade, para reduzir custos. O Key Vault usa endpoint público para permitir que runners hospedados pelo GitHub gravem segredos; o acesso aos segredos continua protegido por Azure RBAC. A remoção do endpoint privado e do DNS privado reduz custos, mas elimina o isolamento de rede do Key Vault. A proteção contra limpeza e a exclusão reversível permanecem habilitadas.
 
 ## API Health Checks & Postman
 

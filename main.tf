@@ -25,7 +25,6 @@ data "terraform_remote_state" "foundation" {
     container_name       = var.foundation_state_container_name
     key                  = var.foundation_state_key
     use_azuread_auth     = true
-    use_oidc             = true
   }
 }
 
@@ -36,11 +35,6 @@ data "azurerm_resource_group" "shared" {
 data "azurerm_virtual_network" "shared" {
   name                = data.terraform_remote_state.foundation.outputs.vnet_name
   resource_group_name = data.azurerm_resource_group.shared.name
-}
-data "azurerm_subnet" "private_endpoints" {
-  name                 = reverse(split("/", data.terraform_remote_state.foundation.outputs.private_endpoints_subnet_id))[0]
-  virtual_network_name = data.azurerm_virtual_network.shared.name
-  resource_group_name  = data.azurerm_resource_group.shared.name
 }
 
 
@@ -112,14 +106,15 @@ resource "azurerm_postgresql_flexible_server_database" "this" {
 }
 
 resource "azurerm_key_vault" "this" {
-  name                          = coalesce(var.key_vault_name, "kv-${substr(local.name_prefix, 0, 12)}-${local.suffix}")
-  location                      = data.azurerm_resource_group.shared.location
-  resource_group_name           = data.azurerm_resource_group.shared.name
-  tenant_id                     = data.azurerm_client_config.current.tenant_id
-  sku_name                      = "standard"
-  rbac_authorization_enabled    = true
-  purge_protection_enabled      = true
-  soft_delete_retention_days    = 90
+  name                       = coalesce(var.key_vault_name, "kv-${substr(local.name_prefix, 0, 12)}-${local.suffix}")
+  location                   = data.azurerm_resource_group.shared.location
+  resource_group_name        = data.azurerm_resource_group.shared.name
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  sku_name                   = "standard"
+  rbac_authorization_enabled = true
+  purge_protection_enabled   = true
+  soft_delete_retention_days = 90
+  # GitHub-hosted release runners access secrets over the public endpoint; RBAC authorizes access.
   public_network_access_enabled = true
 
   network_acls {
@@ -129,38 +124,6 @@ resource "azurerm_key_vault" "this" {
   tags = local.tags
 }
 
-resource "azurerm_private_dns_zone" "key_vault" {
-  name                = "privatelink.vaultcore.azure.net"
-  resource_group_name = data.azurerm_resource_group.shared.name
-  tags                = local.tags
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "key_vault" {
-  name                  = "pdnslink-key-vault-${local.name_prefix}"
-  private_dns_zone_name = azurerm_private_dns_zone.key_vault.name
-  virtual_network_id    = data.azurerm_virtual_network.shared.id
-  resource_group_name   = data.azurerm_resource_group.shared.name
-}
-
-resource "azurerm_private_endpoint" "key_vault" {
-  name                = "pe-kv-${local.name_prefix}"
-  location            = data.azurerm_resource_group.shared.location
-  resource_group_name = data.azurerm_resource_group.shared.name
-  subnet_id           = data.azurerm_subnet.private_endpoints.id
-  tags                = local.tags
-
-  private_service_connection {
-    name                           = "psc-kv-${local.name_prefix}"
-    private_connection_resource_id = azurerm_key_vault.this.id
-    subresource_names              = ["vault"]
-    is_manual_connection           = false
-  }
-
-  private_dns_zone_group {
-    name                 = "key-vault-private-dns"
-    private_dns_zone_ids = [azurerm_private_dns_zone.key_vault.id]
-  }
-}
 
 resource "azurerm_key_vault_secret" "postgres_auth_readonly_connection_string" {
   name         = "postgres-auth-readonly-connection-string"
