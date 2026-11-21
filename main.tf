@@ -125,6 +125,7 @@ resource "azurerm_key_vault" "this" {
 }
 
 
+# Deprecated: no longer read by the function code; remove together with the Azure release migration.
 resource "azurerm_key_vault_secret" "postgres_auth_readonly_connection_string" {
   name         = "postgres-auth-readonly-connection-string"
   value        = "Host=${azurerm_postgresql_flexible_server.this.fqdn};Port=5432;Database=${azurerm_postgresql_flexible_server_database.this.name};Username=${var.auth_readonly_login};Password=${var.auth_readonly_password};Ssl Mode=Require;Trust Server Certificate=false"

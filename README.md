@@ -10,7 +10,7 @@ Terraform Infrastructure as Code (IaC) repository provisioning managed PostgreSQ
 - **Database Networking**: Delegated Subnet (`snet-postgresql`), Private DNS Zone (`private.postgres.database.azure.com`), and VNet Link to ensure isolated private communication.
 - **Key Vault & Secrets**: Azure Key Vault with Azure RBAC authorization and a public endpoint for authenticated access, with automated secret storage for:
   - `postgres-connection-string`: Primary connection string for CatCar API.
-  - `postgres-auth-readonly-connection-string`: Read-only connection string for CatCar Auth Function.
+  - `postgres-auth-readonly-connection-string`: Deprecated legacy Function connection string retained until the Azure release migration.
   - `customer-jwt-signing-key`: Customer JWT signing key shared with APIM.
 - **Foundation dependency**: Resource group and VNet are read from the foundation Terraform state.
 
